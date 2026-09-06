@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { HeaderFields } from "@/components/checklist/items";
+import { HeaderFields } from "@/components/checklist/header-fields";
 import { ProgressMeter } from "@/components/checklist/progress-meter";
 import { useInspection } from "@/lib/inspection/store";
 import { homeModel, walkIndexForFlag, type HomeFilter } from "@/lib/inspection/dashboard";

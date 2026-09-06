@@ -1,20 +1,41 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { ChevronLeft, Settings } from "lucide-react";
-import { ChecklistView } from "@/components/checklist/checklist-view";
-import { GuideView } from "@/components/guide/guide-view";
-import { SettingsSheet } from "@/components/settings-sheet";
-import { ReportView } from "@/components/report-view";
-import { PlainSheet } from "@/components/guide/plain-sheet";
 import { HomeView } from "@/components/dashboard/home-view";
-import { HistoryView } from "@/components/dashboard/history-view";
-import { ReportsView } from "@/components/dashboard/reports-view";
-import { ResultsView } from "@/components/dashboard/results-view";
 import { useInspection } from "@/lib/inspection/store";
-import { headerComplete } from "@/lib/inspection/types";
 import { ProgressMeter } from "@/components/checklist/progress-meter";
 import { installViewportLock } from "@/lib/viewport";
-import { missingRequiredPhotos } from "@/lib/inspection/photo-slots";
 import { formatSaved } from "@/lib/utils";
+
+const ChecklistView = lazy(() =>
+  import("@/components/checklist/checklist-view").then((m) => ({ default: m.ChecklistView })),
+);
+const GuideView = lazy(() => import("@/components/guide/guide-view").then((m) => ({ default: m.GuideView })));
+const SettingsSheet = lazy(() =>
+  import("@/components/settings-sheet").then((m) => ({ default: m.SettingsSheet })),
+);
+const ReportView = lazy(() => import("@/components/report-view").then((m) => ({ default: m.ReportView })));
+const PlainSheet = lazy(() => import("@/components/guide/plain-sheet").then((m) => ({ default: m.PlainSheet })));
+const HistoryView = lazy(() =>
+  import("@/components/dashboard/history-view").then((m) => ({ default: m.HistoryView })),
+);
+const ReportsView = lazy(() =>
+  import("@/components/dashboard/reports-view").then((m) => ({ default: m.ReportsView })),
+);
+const ResultsView = lazy(() =>
+  import("@/components/dashboard/results-view").then((m) => ({ default: m.ResultsView })),
+);
+
+function ChunkFallback() {
+  return (
+    <div className="hud-card py-10">
+      <p className="text-center text-xl font-semibold tracking-wide text-foreground">Loading…</p>
+    </div>
+  );
+}
+
+function LazyPane({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<ChunkFallback />}>{children}</Suspense>;
+}
 
 function SavedStamp() {
   const lastSavedAt = useInspection((s) => s.lastSavedAt);
@@ -34,17 +55,12 @@ function SavedStamp() {
 }
 
 export function AppShell() {
-  const hydrated = useInspection((s) => s.hydrated);
   const tab = useInspection((s) => s.tab);
   const mode = useInspection((s) => s.checklistMode);
-  const setTab = useInspection((s) => s.setTab);
-  const goHome = useInspection((s) => s.goHome);
-  const clearGuideFocus = useInspection((s) => s.clearGuideFocus);
-  const draft = useInspection((s) => s.draft);
-  const photos = useInspection((s) => s.photos);
-  const requestSubmit = useInspection((s) => s.requestSubmit);
-  const markSubmitted = useInspection((s) => s.markSubmitted);
-  const patch = useInspection((s) => s.patch);
+  const headerReady = useInspection((s) => s.headerReady);
+  const missingPhotoCount = useInspection((s) => s.missingRequiredPhotoCount);
+  const plainId = useInspection((s) => s.plainId);
+  const reportOpen = useInspection((s) => s.successOpen);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -52,12 +68,12 @@ export function AppShell() {
       useInspection.getState().setHydrated();
     });
     const w = window as unknown as {
-      __armadaPatch: typeof patch;
+      __armadaPatch: ReturnType<typeof useInspection.getState>["patch"];
       __armadaGet: () => ReturnType<typeof useInspection.getState>;
     };
     w.__armadaPatch = useInspection.getState().patch;
     w.__armadaGet = () => useInspection.getState();
-  }, [patch]);
+  }, []);
 
   useEffect(() => installViewportLock(), []);
 
@@ -76,15 +92,14 @@ export function AppShell() {
     };
   }, []);
 
-  const ready = headerComplete(draft.header);
-  const missingPhotos = missingRequiredPhotos(draft, photos);
   const onHome = tab === "home";
   const onResults = tab === "results";
   const walking = tab === "checklist" && mode === "walk";
 
   function onSubmit() {
-    if (!requestSubmit()) return;
-    markSubmitted("idle");
+    const s = useInspection.getState();
+    if (!s.requestSubmit()) return;
+    s.markSubmitted("idle");
   }
 
   return (
@@ -95,7 +110,7 @@ export function AppShell() {
             {onHome || onResults ? null : (
               <button
                 type="button"
-                onClick={goHome}
+                onClick={() => useInspection.getState().goHome()}
                 className="tap-56 grid place-items-center rounded border border-border bg-raised"
                 aria-label="Dashboard"
               >
@@ -149,7 +164,7 @@ export function AppShell() {
             <div className="hud-seg">
               <button
                 type="button"
-                onClick={() => setTab("checklist")}
+                onClick={() => useInspection.getState().setTab("checklist")}
                 data-on={tab === "checklist" ? "true" : "false"}
                 className="hud-seg-btn"
               >
@@ -158,8 +173,9 @@ export function AppShell() {
               <button
                 type="button"
                 onClick={() => {
-                  clearGuideFocus();
-                  setTab("guide");
+                  const s = useInspection.getState();
+                  s.clearGuideFocus();
+                  s.setTab("guide");
                 }}
                 data-on={tab === "guide" ? "true" : "false"}
                 className="hud-seg-btn"
@@ -175,11 +191,31 @@ export function AppShell() {
 
       <main className="app-scroll mx-auto w-full max-w-xl px-4 pt-4 pb-4">
         {tab === "home" ? <HomeView /> : null}
-        {tab === "results" ? <ResultsView /> : null}
-        {tab === "checklist" ? <ChecklistView /> : null}
-        {tab === "guide" ? <GuideView /> : null}
-        {tab === "history" ? <HistoryView /> : null}
-        {tab === "reports" ? <ReportsView /> : null}
+        {tab === "results" ? (
+          <LazyPane>
+            <ResultsView />
+          </LazyPane>
+        ) : null}
+        {tab === "checklist" ? (
+          <LazyPane>
+            <ChecklistView />
+          </LazyPane>
+        ) : null}
+        {tab === "guide" ? (
+          <LazyPane>
+            <GuideView />
+          </LazyPane>
+        ) : null}
+        {tab === "history" ? (
+          <LazyPane>
+            <HistoryView />
+          </LazyPane>
+        ) : null}
+        {tab === "reports" ? (
+          <LazyPane>
+            <ReportsView />
+          </LazyPane>
+        ) : null}
       </main>
 
       {tab === "checklist" && mode === "full" ? (
@@ -187,21 +223,33 @@ export function AppShell() {
           <button
             type="button"
             onClick={() => onSubmit()}
-            disabled={!ready}
+            disabled={!headerReady}
             className="tap-56 w-full rounded bg-primary font-mono text-sm font-semibold tracking-widest uppercase text-primary-foreground disabled:opacity-40"
           >
-            {ready
-              ? missingPhotos.length
-                ? `${missingPhotos.length} photos required`
+            {headerReady
+              ? missingPhotoCount > 0
+                ? `${missingPhotoCount} photos required`
                 : "Submit"
               : "Fill date, miles, inspector"}
           </button>
         </div>
       ) : null}
 
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <PlainSheet />
-      <ReportView />
+      {settingsOpen ? (
+        <LazyPane>
+          <SettingsSheet open onClose={() => setSettingsOpen(false)} />
+        </LazyPane>
+      ) : null}
+      {plainId ? (
+        <LazyPane>
+          <PlainSheet />
+        </LazyPane>
+      ) : null}
+      {reportOpen ? (
+        <LazyPane>
+          <ReportView />
+        </LazyPane>
+      ) : null}
     </div>
   );
 }

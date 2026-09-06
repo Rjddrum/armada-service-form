@@ -5,7 +5,6 @@ import {
   CabinItems,
   EngineItems,
   FluidsRest,
-  HeaderFields,
   OilLevelItem,
   ResultItem,
   RoadItems,
@@ -14,6 +13,7 @@ import {
   UnderbodyItems,
   BaselineItems,
 } from "@/components/checklist/items";
+import { HeaderFields } from "@/components/checklist/header-fields";
 import { WalkView } from "@/components/checklist/walk-view";
 import { ConditionBanner } from "@/components/checklist/condition-banner";
 import { useInspection } from "@/lib/inspection/store";

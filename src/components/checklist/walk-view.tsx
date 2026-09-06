@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { BookOpen, ChevronLeft, ChevronRight, Info } from "lucide-react";
-import { CheckRowById } from "@/components/checklist/items";
-import { PhotoField, NotesField, WalkEmbed } from "@/components/ui/fields";
+import { PhotoField } from "@/components/checklist/photo-field";
+import { NotesField, WalkEmbed } from "@/components/ui/field-inputs";
 import { RepairBlock } from "@/components/checklist/repair-block";
 import { VoiceNote } from "@/components/checklist/voice-note";
 import { GuideDiagram } from "@/lib/guide/diagrams";
-import { plainFor } from "@/lib/guide/plain";
+import type { PlainExplain } from "@/lib/guide/plain";
 import { useInspection } from "@/lib/inspection/store";
 import { walkQueue, type WalkCard } from "@/lib/inspection/walk";
 import { oilChangeMode } from "@/lib/inspection/plan";
@@ -49,6 +49,10 @@ const NOTE_CHIPS = [
   "original radiator",
   "no glitter",
 ];
+
+const CheckRowById = lazy(() =>
+  import("@/components/checklist/items").then((m) => ({ default: m.CheckRowById })),
+);
 
 function slotsFor(id: string) {
   return photoSlotsForItem(id).filter((s) => photoSlotDef(s));
@@ -130,7 +134,7 @@ function WalkCardView({ card, index, total }: { card: WalkCard; index: number; t
   const openPlain = useInspection((s) => s.openPlain);
   const choice = walkChoiceOf(draft, card.id);
   const notes = rowNotes(draft, card.id);
-  const plain = card.guideId ? plainFor(card.guideId) : undefined;
+  const [plain, setPlain] = useState<PlainExplain | undefined>();
   const slots = slotsFor(card.id);
   const required = requiredSlots(card.id);
   const skipText = required.map((s) => photoSkipReason(draft, s)).find(Boolean) ?? "";
@@ -140,6 +144,20 @@ function WalkCardView({ card, index, total }: { card: WalkCard; index: number; t
     setReason(skipText);
   }, [card.id, skipText]);
 
+  useEffect(() => {
+    let live = true;
+    if (!card.guideId) {
+      setPlain(undefined);
+      return;
+    }
+    void import("@/lib/guide/plain").then((m) => {
+      if (live) setPlain(m.plainFor(card.guideId!));
+    });
+    return () => {
+      live = false;
+    };
+  }, [card.guideId]);
+
   function applyReason(v: string) {
     setReason(v);
     for (const slot of required) setSkip(slot, v);
@@ -147,6 +165,11 @@ function WalkCardView({ card, index, total }: { card: WalkCard; index: number; t
 
   const isResult = card.id === "result";
   const showFields = card.id !== "engine.overview" && card.id !== "cabin.dash";
+  const lookFor = card.lookFor.length
+    ? card.lookFor
+    : plain
+      ? [plain.looksGood, plain.specPlain, plain.secondLook, plain.stopShop].filter((s) => Boolean(s && s.trim()))
+      : [];
 
   return (
     <div className="space-y-4">
@@ -196,11 +219,11 @@ function WalkCardView({ card, index, total }: { card: WalkCard; index: number; t
         </div>
       ) : null}
 
-      {card.lookFor.length ? (
+      {lookFor.length ? (
         <div className="hud-card space-y-2">
           <p className="field-label">What to look for</p>
           <ul className="space-y-1.5 text-base leading-relaxed text-foreground">
-            {card.lookFor.map((b) => (
+            {lookFor.map((b) => (
               <li key={b}>• {b}</li>
             ))}
           </ul>
@@ -209,7 +232,9 @@ function WalkCardView({ card, index, total }: { card: WalkCard; index: number; t
 
       {showFields ? (
         <WalkEmbed.Provider value={true}>
-          <CheckRowById id={card.id} />
+          <Suspense fallback={null}>
+            <CheckRowById id={card.id} />
+          </Suspense>
         </WalkEmbed.Provider>
       ) : null}
 

@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { enablePatches, produce, produceWithPatches, type Patch } from "immer";
 import { emptyDraft, emptySettings, rememberPeople } from "./defaults";
 import {
-  headerComplete,
   isDraftStarted,
   isSmodRisk,
   ALL_SECTION_IDS,
@@ -12,7 +12,7 @@ import {
 } from "./types";
 import { coerceOverall, driveGates, isPassValue } from "./drive";
 import { applyAutoStatuses, overallBlocked } from "./status";
-import { missingRequiredPhotos } from "./photo-slots";
+import { shellChrome } from "./shell-chrome";
 import { buildPlan, flagsFromPlan } from "./plan";
 import {
   alreadyLogged,
@@ -68,6 +68,8 @@ interface InspectionState {
   plainId: string | null;
   lastSavedAt: number;
   saveError: string;
+  headerReady: boolean;
+  missingRequiredPhotoCount: number;
   grokBusy: Record<string, boolean>;
   grokError: Record<string, string>;
   setHydrated: () => void;
@@ -111,6 +113,7 @@ interface InspectionState {
   touchSave: () => void;
   setSaveError: (msg: string) => void;
   flushPersist: () => void;
+  flushDerived: () => void;
 }
 
 function readJson<T>(key: string, fallback: T): T {
@@ -175,6 +178,69 @@ function persistSlice(s: PersistSlice): PersistSlice {
     tab: s.tab,
   };
 }
+
+enablePatches();
+
+const DERIVED_MS = 75;
+let derivedTimer: ReturnType<typeof setTimeout> | null = null;
+
+function withChrome(get: () => InspectionState, partial: Partial<InspectionState>): Partial<InspectionState> {
+  if (!("draft" in partial) && !("photos" in partial)) return partial;
+  const cur = get();
+  const draft = partial.draft ?? cur.draft;
+  const photos = partial.photos ?? cur.photos;
+  return { ...partial, ...shellChrome(draft, photos) };
+}
+
+function applyDerivedMut(draft: InspectionDraft, maint: MaintState, photos: Record<string, PhotoShot>) {
+  applyPlan(draft, maint);
+  if (!isSmodRisk(draft)) draft.smodAcknowledged = false;
+  applyAutoStatuses(draft, photos);
+  coerceOverall(draft);
+  if (overallBlocked(draft) && isPassValue(draft.result.overall)) {
+    draft.result.overall = driveGates(draft).length ? "do-not-drive" : "schedule";
+  }
+}
+
+function notesOnlyPatches(patches: Patch[]): boolean {
+  return patches.length > 0 && patches.every((p) => p.path[p.path.length - 1] === "notes");
+}
+
+function flushPatches(patches: Patch[]): boolean {
+  return patches.some((p) => {
+    const a = p.path[0];
+    const b = p.path[1];
+    if (a === "itemStatus") return true;
+    if (a === "header" && (b === "miles" || b === "visitType" || b === "drive" || b === "towPkg")) return true;
+    if (a === "result" && b === "overall") return true;
+    return false;
+  });
+}
+
+function runDerivedNow() {
+  if (derivedTimer != null) {
+    clearTimeout(derivedTimer);
+    derivedTimer = null;
+  }
+  const s = useInspection.getState();
+  const draft = produce(s.draft, (d) => {
+    applyDerivedMut(d, s.maint, s.photos);
+  });
+  useInspection.setState(withChrome(() => useInspection.getState(), { draft }));
+}
+
+function scheduleDerived(immediate: boolean) {
+  if (immediate) {
+    runDerivedNow();
+    return;
+  }
+  if (derivedTimer != null) clearTimeout(derivedTimer);
+  derivedTimer = setTimeout(() => {
+    derivedTimer = null;
+    runDerivedNow();
+  }, DERIVED_MS);
+}
+
 
 function persistStorage() {
   return createJSONStorage(() => ({
@@ -315,6 +381,8 @@ export const useInspection = create<InspectionState>()(
       plainId: null,
       lastSavedAt: 0,
       saveError: "",
+      headerReady: false,
+      missingRequiredPhotoCount: 0,
       grokBusy: {},
       grokError: {},
       setHydrated: () => {
@@ -336,11 +404,11 @@ export const useInspection = create<InspectionState>()(
         const archive = readJson<InspectionDraft[]>(ARCHIVE_KEY, get().archive);
         const lastSubmitted = readJson<InspectionDraft | null>(LAST_KEY, null);
         const draftId = get().draft.id;
-        const draft = structuredClone(get().draft);
-        applyPlan(draft, get().maint);
-        applyAutoStatuses(draft);
+        const draft = produce(get().draft, (d) => {
+          applyDerivedMut(d, get().maint, get().photos);
+        });
         const tab = get().tab;
-        set({
+        set(withChrome(get, {
           hydrated: true,
           settings,
           archive,
@@ -348,26 +416,41 @@ export const useInspection = create<InspectionState>()(
           draft,
           tab,
           lastSavedAt: readSavedAt(),
-        });
-        void loadPhotos(draftId).then((photos) => {
-          if (get().draft.id === draftId) set({ photos });
-        });
+        }));
+        const load = () => {
+          void loadPhotos(draftId).then((photos) => {
+            if (get().draft.id === draftId) set(withChrome(get, { photos }));
+          });
+        };
+        if (typeof requestIdleCallback === "function") requestIdleCallback(load);
+        else setTimeout(load, 0);
       },
       setTab: (tab) => set({ tab }),
       setChecklistMode: (mode) => set({ checklistMode: mode, tab: "checklist" }),
-      setWalkIndex: (i) => set({ walkIndex: Math.max(0, Math.round(i)), lastSavedAt: markSaved() }),
+      setWalkIndex: (i) => {
+        runDerivedNow();
+        set({ walkIndex: Math.max(0, Math.round(i)), lastSavedAt: markSaved() });
+      },
       goHome: () => set({ tab: "home", homeFilter: null, successOpen: false }),
-      openWalk: (index) =>
+      openWalk: (index) => {
+        runDerivedNow();
         set((s) => ({
           tab: "checklist" as const,
           checklistMode: "walk" as const,
           walkIndex: Math.max(0, Math.round(index ?? s.walkIndex)),
           homeFilter: null,
-        })),
+        }));
+      },
       openFull: () => set({ tab: "checklist", checklistMode: "full", homeFilter: null }),
       setHomeFilter: (filter) => set({ homeFilter: filter }),
-      openReport: () => set({ successOpen: true }),
-      openResults: () => set({ tab: "results", homeFilter: null, successOpen: false }),
+      openReport: () => {
+        runDerivedNow();
+        set({ successOpen: true });
+      },
+      openResults: () => {
+        runDerivedNow();
+        set({ tab: "results", homeFilter: null, successOpen: false });
+      },
       jumpToGuide: (stepId) => set({ tab: "guide", guideTarget: stepId, guideFocus: stepId, plainId: null }),
       openPlain: (id) => set({ plainId: id }),
       closePlain: () => set({ plainId: null }),
@@ -387,20 +470,19 @@ export const useInspection = create<InspectionState>()(
       collapseAll: () => set({ openSections: [] }),
       patch: (fn) => {
         const prevVin = get().draft.header.vin;
-        const next = structuredClone(get().draft);
-        fn(next);
+        const [patched, patches] = produceWithPatches(get().draft, fn);
+        if (!patches.length) return;
         let maint = get().maint;
-        if (next.header.vin !== prevVin) maint = rekeyMaint(maint, prevVin, next.header.vin);
-        applyPlan(next, maint);
-        next.updatedAt = Date.now();
-        if (!isSmodRisk(next)) next.smodAcknowledged = false;
-        applyAutoStatuses(next, get().photos);
-        coerceOverall(next);
-        if (overallBlocked(next) && isPassValue(next.result.overall)) {
-          next.result.overall = driveGates(next).length ? "do-not-drive" : "schedule";
-        }
+        if (patched.header.vin !== prevVin) maint = rekeyMaint(maint, prevVin, patched.header.vin);
+        const notesOnly = notesOnlyPatches(patches);
+        const immediate = flushPatches(patches);
+        const next = produce(patched, (d) => {
+          d.updatedAt = Date.now();
+          if (!notesOnly && immediate) applyDerivedMut(d, maint, get().photos);
+        });
         rememberPeople(next.header.inspector, next.header.vin);
-        set({ draft: next, maint, headerHighlight: false, lastSavedAt: markSaved(), saveError: "" });
+        set(withChrome(get, { draft: next, maint, headerHighlight: false, lastSavedAt: markSaved(), saveError: "" }));
+        if (!notesOnly && !immediate) scheduleDerived(false);
       },
       setSettings: (patch) => {
         const settings = { ...get().settings, ...patch };
@@ -408,13 +490,13 @@ export const useInspection = create<InspectionState>()(
         rememberPeople(settings.lastInspector, settings.lastVin);
         set({ settings });
       },
-      resetDraft: () => set({ draft: emptyDraft(), successOpen: false, photos: {}, grokBusy: {}, grokError: {} }),
+      resetDraft: () => set(withChrome(get, { draft: emptyDraft(), successOpen: false, photos: {}, grokBusy: {}, grokError: {} })),
       startNew: () => {
         const { draft, archive, lastSubmitted } = get();
         const nextArchive = pushArchive(draft, archive);
         writeJson(ARCHIVE_KEY, nextArchive);
         const nextDraft = emptyDraft();
-        set({
+        set(withChrome(get, {
           draft: nextDraft,
           archive: nextArchive,
           successOpen: false,
@@ -426,7 +508,7 @@ export const useInspection = create<InspectionState>()(
           photos: {},
           grokBusy: {},
           grokError: {},
-        });
+        }));
         void prunePhotos([nextDraft.id, ...nextArchive.map((a) => a.id), lastSubmitted?.id ?? ""]);
       },
       restoreArchive: (id) => {
@@ -435,15 +517,15 @@ export const useInspection = create<InspectionState>()(
         const { draft, archive } = get();
         const nextArchive = pushArchive(draft, archive.filter((a) => a.id !== id));
         writeJson(ARCHIVE_KEY, nextArchive);
-        set({
+        set(withChrome(get, {
           draft: hydrateDraft(found),
           archive: nextArchive,
           tab: "home",
           successOpen: false,
           photos: {},
-        });
+        }));
         void loadPhotos(found.id).then((photos) => {
-          if (get().draft.id === found.id) set({ photos });
+          if (get().draft.id === found.id) set(withChrome(get, { photos }));
         });
       },
       clearArchives: () => {
@@ -451,7 +533,7 @@ export const useInspection = create<InspectionState>()(
         writeJson(LAST_KEY, null);
         writeJson(DRAFT_KEY, emptyDraft());
         void clearAllPhotos();
-        set({ archive: [], lastSubmitted: null, draft: emptyDraft(), photos: {} });
+        set(withChrome(get, { archive: [], lastSubmitted: null, draft: emptyDraft(), photos: {} }));
       },
       markSubmitted: (emailStatus, err) => {
         const draft = structuredClone(get().draft);
@@ -477,7 +559,8 @@ export const useInspection = create<InspectionState>()(
       closeSuccess: () => set({ successOpen: false }),
       keepEditing: () => set({ successOpen: false, tab: "results" }),
       requestSubmit: () => {
-        if (!headerComplete(get().draft.header)) {
+        runDerivedNow();
+        if (!get().headerReady) {
           set((s) => ({
             headerHighlight: true,
             tab: "home",
@@ -488,8 +571,7 @@ export const useInspection = create<InspectionState>()(
           }));
           return false;
         }
-        const missing = missingRequiredPhotos(get().draft, get().photos);
-        if (missing.length) {
+        if (get().missingRequiredPhotoCount) {
           set({ photoHighlight: true, tab: "checklist" });
           return false;
         }
@@ -497,11 +579,13 @@ export const useInspection = create<InspectionState>()(
         return true;
       },
       setPhoto: (slot, shot) => {
-        const draft = structuredClone(get().draft);
-        if (draft.photoSkip?.[slot]) delete draft.photoSkip[slot];
-        draft.updatedAt = Date.now();
+        runDerivedNow();
+        const draft = produce(get().draft, (d) => {
+          if (d.photoSkip?.[slot]) delete d.photoSkip[slot];
+          d.updatedAt = Date.now();
+        });
         const photos = { ...get().photos, [slot]: shot };
-        set({ photos, draft, photoHighlight: false, lastSavedAt: markSaved(), saveError: "" });
+        set(withChrome(get, { photos, draft, photoHighlight: false, lastSavedAt: markSaved(), saveError: "" }));
         void putPhoto(draft.id, slot, shot)
           .then(() => {
             get().touchSave();
@@ -514,26 +598,27 @@ export const useInspection = create<InspectionState>()(
         const draft = get().draft;
         const photos = { ...get().photos };
         delete photos[slot];
-        set({ photos, draft: { ...draft, updatedAt: Date.now() }, lastSavedAt: markSaved() });
+        set(withChrome(get, { photos, draft: { ...draft, updatedAt: Date.now() }, lastSavedAt: markSaved() }));
         void deletePhoto(draft.id, slot);
       },
       setPhotoSkip: (slot, reason) => {
-        const draft = structuredClone(get().draft);
-        if (!draft.photoSkip) draft.photoSkip = {};
-        if (reason.trim()) draft.photoSkip[slot] = reason.trim();
-        else delete draft.photoSkip[slot];
-        draft.updatedAt = Date.now();
-        set({ draft, photoHighlight: false, lastSavedAt: markSaved() });
+        runDerivedNow();
+        const draft = produce(get().draft, (d) => {
+          if (!d.photoSkip) d.photoSkip = {};
+          if (reason.trim()) d.photoSkip[slot] = reason.trim();
+          else delete d.photoSkip[slot];
+          d.updatedAt = Date.now();
+        });
+        set(withChrome(get, { draft, photoHighlight: false, lastSavedAt: markSaved() }));
       },
       patchMaint: (fn) => {
         const vin = get().draft.header.vin;
         const rows = fn(rowsForVin(get().maint, vin).map((r) => ({ ...r })));
         const maint = patchRows(get().maint, vin, rows);
-        const draft = structuredClone(get().draft);
-        applyPlan(draft, maint);
-        applyAutoStatuses(draft, get().photos);
-        coerceOverall(draft);
-        set({ maint, draft, lastSavedAt: markSaved() });
+        const draft = produce(get().draft, (d) => {
+          applyDerivedMut(d, maint, get().photos);
+        });
+        set(withChrome(get, { maint, draft, lastSavedAt: markSaved() }));
       },
       addMaintRow: (over) => {
         get().patchMaint((rows) => [...rows, emptyMaintRow(over)]);
@@ -561,13 +646,18 @@ export const useInspection = create<InspectionState>()(
       },
       clearMaint: () => {
         const maint = emptyMaint();
-        const draft = structuredClone(get().draft);
-        applyPlan(draft, maint);
-        set({ maint, draft });
+        const draft = produce(get().draft, (d) => {
+          applyPlan(d, maint);
+        });
+        set(withChrome(get, { maint, draft }));
       },
       touchSave: () => set({ lastSavedAt: markSaved(), saveError: "" }),
       setSaveError: (msg) => set({ saveError: msg }),
+      flushDerived: () => {
+        runDerivedNow();
+      },
       flushPersist: () => {
+        runDerivedNow();
         const s = get();
         const ok = writeJson(DRAFT_KEY, {
           state: persistSlice(s),
