@@ -12,14 +12,6 @@ import {
   repairTotals,
 } from "@/lib/inspection/repairs";
 import { wearHistory } from "@/lib/inspection/wear";
-import {
-  blobToBase64,
-  buildInspectionPdf,
-  downloadBlob,
-  emailSubject,
-  printPdf,
-  sharePdf,
-} from "@/lib/inspection/pdf";
 import { inspectionEmailHtml, sendInspectionEmail } from "@/lib/email";
 import { overallLabel } from "@/lib/inspection/types";
 import { formatMiles } from "@/lib/utils";
@@ -86,8 +78,14 @@ export function ReportView() {
 
   if (!open) return null;
 
+  async function pdfLib() {
+    return import("@/lib/inspection/pdf");
+  }
+
   async function pdf() {
     if (cache.current) return cache.current;
+    useInspection.getState().flushDerived();
+    const { buildInspectionPdf } = await pdfLib();
     const built = await buildInspectionPdf(draft, photos, history, log);
     cache.current = built;
     return built;
@@ -369,7 +367,10 @@ export function ReportView() {
           <button
             type="button"
             disabled={Boolean(busy)}
-            onClick={() => void run("print", async () => printPdf((await pdf()).blob))}
+            onClick={() => void run("print", async () => {
+              const { printPdf } = await pdfLib();
+              printPdf((await pdf()).blob);
+            })}
             className="tap-44 rounded border border-border bg-inset text-sm font-medium"
           >
             {busy === "print" ? "Printing…" : "Print report"}
@@ -380,6 +381,7 @@ export function ReportView() {
             onClick={() =>
               void run("download", async () => {
                 const p = await pdf();
+                const { downloadBlob } = await pdfLib();
                 downloadBlob(p.blob, p.filename);
               })
             }
@@ -393,6 +395,7 @@ export function ReportView() {
             onClick={() =>
               void run("share", async () => {
                 const p = await pdf();
+                const { sharePdf, downloadBlob } = await pdfLib();
                 const ok = await sharePdf(p.blob, p.filename);
                 if (!ok) downloadBlob(p.blob, p.filename);
               })
@@ -414,6 +417,7 @@ export function ReportView() {
               }
               try {
                 const p = await pdf();
+                const { emailSubject, blobToBase64 } = await pdfLib();
                 const res = await sendInspectionEmail({
                   data: {
                     to,

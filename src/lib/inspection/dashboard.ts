@@ -7,7 +7,7 @@ import { itemComplete, inspectionProgress, type InspectionProgress } from "./pro
 import { driveGates } from "./drive.ts";
 import { missingRequiredPhotos, photosForItem, photoSlotsForItem, PHOTO_SLOTS } from "./photo-slots.ts";
 import { walkRowGuideId } from "../guide/catalog.ts";
-import { plainFor } from "../guide/plain.ts";
+import { meaningFor } from "../guide/meaning.ts";
 import type { MaintRow, MaintFlag } from "./maint.ts";
 import type { PhotoShot } from "./photos.ts";
 import { repairTable, type RepairRow } from "./repairs.ts";
@@ -219,9 +219,7 @@ export function nextAction(
 }
 
 function meaningOf(guideId: string, fallback: string): string {
-  const p = guideId ? plainFor(guideId) : undefined;
-  if (!p) return fallback;
-  return (p.why || p.what || fallback).split(/(?<=\.)\s/)[0] ?? fallback;
+  return meaningFor(guideId, fallback);
 }
 
 function lineFromCard(

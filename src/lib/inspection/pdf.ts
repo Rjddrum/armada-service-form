@@ -1,4 +1,3 @@
-import { jsPDF } from "jspdf";
 import { formatMiles, formatStamp } from "@/lib/utils";
 import { oilChangeMode } from "./plan.ts";
 import {
@@ -70,14 +69,16 @@ function dash(v: string | undefined | null): string {
   return t ? ascii(t) : "";
 }
 
+type PdfDoc = InstanceType<typeof import("jspdf").jsPDF>;
+
 class Writer {
-  doc: jsPDF;
+  doc: PdfDoc;
   y = MARGIN;
   page = 1;
   photos: Record<string, PhotoShot>;
   grok: Record<string, string>;
-  constructor(photos: Record<string, PhotoShot>, grok: Record<string, string> = {}) {
-    this.doc = new jsPDF({ unit: "pt", format: "letter" });
+  constructor(doc: PdfDoc, photos: Record<string, PhotoShot>, grok: Record<string, string> = {}) {
+    this.doc = doc;
     this.photos = photos;
     this.grok = grok;
   }
@@ -266,6 +267,7 @@ export async function buildInspectionPdf(
   history: InspectionDraft[] = [],
   log: MaintRow[] = [],
 ) {
+  const { jsPDF } = await import("jspdf");
   const grok: Record<string, string> = {};
   for (const [id, g] of Object.entries(draft.grokScan ?? {})) {
     const line = grokReportLine(g);
@@ -273,7 +275,7 @@ export async function buildInspectionPdf(
     grok[id] = line;
     if (g.slot) grok[g.slot] = line;
   }
-  const w = new Writer(photos, grok);
+  const w = new Writer(new jsPDF({ unit: "pt", format: "letter" }), photos, grok);
   const h = draft.header;
   const summary = buildSummary(draft, photos, history, log);
 

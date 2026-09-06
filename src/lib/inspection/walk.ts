@@ -1,7 +1,6 @@
 import { isOilChange, rowShows, type DriveType, type PlanFlags, type VisitType } from "./types.ts";
 import { BASELINE_ITEMS } from "./types.ts";
 import { walkRowGuideId } from "../guide/catalog.ts";
-import { plainFor } from "../guide/plain.ts";
 import { STATUS_ROW_LABELS } from "./status.ts";
 
 export interface WalkStep {
@@ -296,11 +295,7 @@ function shopTitle(id: string): string {
 
 function lookForOf(id: string, oilChange: boolean): string[] {
   if (id === "oilLevel" && oilChange) return LOOK_FOR["oilLevel.service"] ?? [];
-  if (LOOK_FOR[id]) return LOOK_FOR[id]!;
-  const gid = walkRowGuideId(id);
-  const p = gid ? plainFor(gid) : undefined;
-  if (!p) return [];
-  return [p.looksGood, p.specPlain, p.secondLook, p.stopShop].filter((s) => Boolean(s && s.trim()));
+  return LOOK_FOR[id] ?? [];
 }
 
 function expandRow(id: string): string[] {

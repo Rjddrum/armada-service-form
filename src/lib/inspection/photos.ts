@@ -65,7 +65,9 @@ export async function loadPhotos(draftId: string): Promise<Record<string, PhotoS
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, "readonly");
       const store = tx.objectStore(STORE);
-      const req = store.openCursor();
+      const prefix = `${draftId}:`;
+      const range = IDBKeyRange.bound(prefix, `${prefix}\uffff`);
+      const req = store.openCursor(range);
       req.onsuccess = () => {
         const cursor = req.result;
         if (!cursor) {
@@ -73,15 +75,12 @@ export async function loadPhotos(draftId: string): Promise<Record<string, PhotoS
           return;
         }
         const key = String(cursor.key);
-        const prefix = `${draftId}:`;
-        if (key.startsWith(prefix)) {
-          const value = cursor.value as PhotoShot | PhotoShot[];
-          if (Array.isArray(value)) {
-            const first = value[0];
-            if (first?.dataUrl) out[key.slice(prefix.length)] = first;
-          } else if (value?.dataUrl) {
-            out[key.slice(prefix.length)] = value;
-          }
+        const value = cursor.value as PhotoShot | PhotoShot[];
+        if (Array.isArray(value)) {
+          const first = value[0];
+          if (first?.dataUrl) out[key.slice(prefix.length)] = first;
+        } else if (value?.dataUrl) {
+          out[key.slice(prefix.length)] = value;
         }
         cursor.continue();
       };
