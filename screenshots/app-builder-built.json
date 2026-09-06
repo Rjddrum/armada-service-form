@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "2005 Armada Inspection",
+      "hasCanvas": false,
+      "bodyTextLen": 372,
+      "bodyTextHash": "5572efe80c442388e7468e8bf18c36570113e07faae03ae1115260f413a7ea21",
+      "bodyTextPrefix": "SYS · VK56DE · RE5R05A 2005 Armada LOCAL 🚙 2005 Nissan Armada S",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "2005 Armada Inspection",
+      "hasCanvas": false,
+      "bodyTextLen": 372,
+      "bodyTextHash": "5572efe80c442388e7468e8bf18c36570113e07faae03ae1115260f413a7ea21",
+      "bodyTextPrefix": "SYS · VK56DE · RE5R05A 2005 Armada LOCAL 🚙 2005 Nissan Armada S",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

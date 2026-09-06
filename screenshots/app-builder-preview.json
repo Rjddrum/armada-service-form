@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "2005 Armada Inspection",
+      "hasCanvas": false,
+      "bodyTextLen": 372,
+      "bodyTextHash": "5572efe80c442388e7468e8bf18c36570113e07faae03ae1115260f413a7ea21",
+      "bodyTextPrefix": "SYS · VK56DE · RE5R05A 2005 Armada LOCAL 🚙 2005 Nissan Armada S",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "2005 Armada Inspection",
+      "hasCanvas": false,
+      "bodyTextLen": 372,
+      "bodyTextHash": "5572efe80c442388e7468e8bf18c36570113e07faae03ae1115260f413a7ea21",
+      "bodyTextPrefix": "SYS · VK56DE · RE5R05A 2005 Armada LOCAL 🚙 2005 Nissan Armada S",
+      "horizontalOverflow": false,
+      "consoleErrors": [
+        "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:\n\n- A server/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\n%s%s https://react.dev/link/hydration-mismatch \n\n  ...\n    <CatchBoundary getResetKey={function getResetKey} errorComponent={function AppErrorComponent} ...>\n      <SafeFragment fallback={function fallback}>\n        <MatchInnerImpl match={{id:\"//\",ssr:true, ...}}>\n          <Lazy>\n            <Home>\n              <AppShell>\n                <div className=\"app-frame ...\">\n                  <header>\n                  <main className=\"app-scroll...\">\n                    <HomeView>\n                      <div className=\"space-y-4 ...\">\n                        <div>\n                        <div>\n                        <div>\n                        <div>\n                        <div>\n                        <button>\n                        <div>\n                        <details className=\"hud-card\">\n                          <summary>\n                          <div className=\"space-y-3 ...\">\n                            <HeaderFields highlight={false}>\n                              <div className=\"hud-card s...\">\n                                <label className=\"block spac...\">\n                                  <span>\n                                  <input\n                                    type=\"date\"\n                                    value=\"2026-09-06\"\n                                    onChange={function onChange}\n                                    className=\"field-input\"\n-                                   style={{caret-color:\"transparent\"}}\n                                  >\n                                <TextField label=\"Miles\" value=\"\" inputMode=\"numeric\" placeholder=\"Type curre...\" ...>\n                                  <label className=\"block spac...\">\n                                    <span>\n                                    <div className=\"flex gap-2\">\n                                      <button>\n                                      <input\n                                        id={undefined}\n                                        value=\"\"\n                                        disabled={undefined}\n                                        inputMode=\"numeric\"\n                                        placeholder=\"Type current miles\"\n                                        onChange={function onChange}\n                                        className=\"field-input min-w-0 flex-1 text-center text-lg placeholder:text-mut...\"\n-                                       style={{caret-color:\"transparent\"}}\n                                      >\n                                      ...\n                                <TextField label=\"Inspector\" value=\"\" onChange={function onChange}>\n                                  <label className=\"block spac...\">\n                                    <span>\n                                    <input\n                                      id={undefined}\n                                      value=\"\"\n                                      disabled={undefined}\n                                      inputMode={undefined}\n                                      placeholder={undefined}\n                                      onChange={function onChange}\n                                      className=\"field-input placeholder:text-muted-foreground\"\n-                                     style={{caret-color:\"transparent\"}}\n                                    >\n                                <TextField label=\"VIN\" value=\"\" placeholder=\"17 characters\" onChange={function onChange}>\n                                  <label className=\"block spac...\">\n                                    <span>\n                                    <input\n                                      id={undefined}\n                                      value=\"\"\n                                      disabled={undefined}\n                                      inputMode={undefined}\n                                      placeholder=\"17 characters\"\n                                      onChange={function onChange}\n                                      className=\"field-input placeholder:text-muted-foreground\"\n-                                     style={{caret-color:\"transparent\"}}\n                                    >\n                                <p>\n                                <PhotoField slot=\"header.vin\" required={true} label=\"VIN plate\">\n                                  <div className=\"space-y-2\">\n                                    <input\n                                      ref={{current:null}}\n                                      type=\"file\"\n                                      accept=\"image/*\"\n                                      capture=\"environment\"\n                                      className=\"hidden\"\n                                      onChange={function onChange}\n-                                     style={{caret-color:\"transparent\"}}\n                                    >\n                                    <input\n                                      ref={{current:null}}\n                                      type=\"file\"\n                                      accept=\"image/*\"\n                                      className=\"hidden\"\n                                      onChange={function onChange}\n-                                     style={{caret-color:\"transparent\"}}\n                                    >\n                                    ...\n                                ...\n                            ...\n                  ...\n"
+      ],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
